@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { discoverMcpServers } from "./config-discovery.js";
 import {
   getServerOrThrow,
+  listDisabledServerNames,
   listEnabledServerNames,
   listServerNames,
   PI_MCP_CONFIG_PATH,
@@ -90,44 +91,133 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("mcp-enable", {
-    description: "Enable and start an MCP server by name",
+    description: "Enable and start one or more disabled MCP servers",
     getArgumentCompletions: serverNameCompletions,
     handler: async (args, ctx) => {
-      const parsed = parseServerArg(args, "/mcp-enable <server>");
-      if (!parsed.ok) {
-        notify(ctx, parsed.message, "error");
+      const name = args.trim();
+      if (name) {
+        const parsed = parseServerArg(args, "/mcp-enable [server]");
+        if (!parsed.ok) {
+          notify(ctx, parsed.message, "error");
+          return;
+        }
+        try {
+          const result = await setServerEnabled(parsed.name, true);
+          const config = await readEffectivePiMcpConfig();
+          const registered = await startEnabledAndRegister(runtime, registrar, config);
+          const status = result.changed ? "Enabled" : "Already enabled";
+          notify(ctx, `${status} ${parsed.name}. Active MCP tools: ${registered.length}.`);
+        } catch (error) {
+          await logDebug("/mcp-enable failed", { name: parsed.name, error: errorMessage(error) });
+          notify(ctx, errorMessage(error), "error");
+        }
         return;
       }
+
       try {
-        const result = await setServerEnabled(parsed.name, true);
+        const sync = await runSync();
+        const homeConfig = await readPiMcpConfig();
+        const disabled = listDisabledServerNames(homeConfig);
+        if (disabled.length === 0) {
+          notify(ctx, `No disabled MCP servers found. Sync complete: ${sync.discoveredCount} discovered.`);
+          return;
+        }
+
+        if (!hasSelectableUi(ctx)) {
+          notify(ctx, [`Usage: /mcp-enable <server>`, `Disabled servers: ${disabled.join(", ")}`].join("\n"));
+          return;
+        }
+
+        const selected = await selectDisabledServersToEnable(ctx, homeConfig, disabled);
+        if (selected.length === 0) {
+          notify(ctx, "No MCP servers enabled.");
+          return;
+        }
+
+        const changed: string[] = [];
+        const alreadyEnabled: string[] = [];
+        for (const serverName of selected) {
+          const result = await setServerEnabled(serverName, true);
+          if (result.changed) changed.push(serverName);
+          else alreadyEnabled.push(serverName);
+        }
+
         const config = await readEffectivePiMcpConfig();
         const registered = await startEnabledAndRegister(runtime, registrar, config);
-        const status = result.changed ? "Enabled" : "Already enabled";
-        notify(ctx, `${status} ${parsed.name}. Active MCP tools: ${registered.length}.`);
+        notify(ctx, [
+          `Enabled MCP servers: ${changed.length ? changed.join(", ") : "none"}`,
+          alreadyEnabled.length ? `Already enabled: ${alreadyEnabled.join(", ")}` : undefined,
+          `Active MCP tools: ${registered.length}`,
+        ].filter((line): line is string => Boolean(line)).join("\n"));
       } catch (error) {
-        await logDebug("/mcp-enable failed", { name: parsed.name, error: errorMessage(error) });
+        await logDebug("/mcp-enable failed", { error: errorMessage(error) });
         notify(ctx, errorMessage(error), "error");
       }
     },
   });
 
   pi.registerCommand("mcp-disable", {
-    description: "Disable and stop an MCP server by name",
+    description: "Disable and stop one or more enabled MCP servers",
     getArgumentCompletions: serverNameCompletions,
     handler: async (args, ctx) => {
-      const parsed = parseServerArg(args, "/mcp-disable <server>");
-      if (!parsed.ok) {
-        notify(ctx, parsed.message, "error");
+      const name = args.trim();
+      if (name) {
+        const parsed = parseServerArg(args, "/mcp-disable [server]");
+        if (!parsed.ok) {
+          notify(ctx, parsed.message, "error");
+          return;
+        }
+        try {
+          const result = await setServerEnabled(parsed.name, false);
+          const removed = await runtime.stopServer(parsed.name);
+          registrar.deactivateTools(removed);
+          const status = result.changed ? "Disabled" : "Already disabled";
+          notify(ctx, `${status} ${parsed.name}. Deactivated MCP tools: ${removed.length}.`);
+        } catch (error) {
+          await logDebug("/mcp-disable failed", { name: parsed.name, error: errorMessage(error) });
+          notify(ctx, errorMessage(error), "error");
+        }
         return;
       }
+
       try {
-        const result = await setServerEnabled(parsed.name, false);
-        const removed = await runtime.stopServer(parsed.name);
-        registrar.deactivateTools(removed);
-        const status = result.changed ? "Disabled" : "Already disabled";
-        notify(ctx, `${status} ${parsed.name}. Deactivated MCP tools: ${removed.length}.`);
+        const config = await readEffectivePiMcpConfig();
+        const enabled = listEnabledServerNames(config);
+        if (enabled.length === 0) {
+          notify(ctx, "No enabled MCP servers found.");
+          return;
+        }
+
+        if (!hasSelectableUi(ctx)) {
+          notify(ctx, [`Usage: /mcp-disable <server>`, `Enabled servers: ${enabled.join(", ")}`].join("\n"));
+          return;
+        }
+
+        const selected = await selectServersToDisable(ctx, config, enabled);
+        if (selected.length === 0) {
+          notify(ctx, "No MCP servers disabled.");
+          return;
+        }
+
+        const changed: string[] = [];
+        const alreadyDisabled: string[] = [];
+        let deactivatedTools = 0;
+        for (const serverName of selected) {
+          const result = await setServerEnabled(serverName, false);
+          if (result.changed) changed.push(serverName);
+          else alreadyDisabled.push(serverName);
+          const removed = await runtime.stopServer(serverName);
+          registrar.deactivateTools(removed);
+          deactivatedTools += removed.length;
+        }
+
+        notify(ctx, [
+          `Disabled MCP servers: ${changed.length ? changed.join(", ") : "none"}`,
+          alreadyDisabled.length ? `Already disabled: ${alreadyDisabled.join(", ")}` : undefined,
+          `Deactivated MCP tools: ${deactivatedTools}`,
+        ].filter((line): line is string => Boolean(line)).join("\n"));
       } catch (error) {
-        await logDebug("/mcp-disable failed", { name: parsed.name, error: errorMessage(error) });
+        await logDebug("/mcp-disable failed", { error: errorMessage(error) });
         notify(ctx, errorMessage(error), "error");
       }
     },
@@ -187,6 +277,57 @@ async function serverNameCompletions(prefix: string) {
     .filter((name) => name.toLowerCase().startsWith(lower) || name.toLowerCase().includes(lower))
     .map((name) => ({ value: name, label: `${name}${config.servers[name].enabled ? " (enabled)" : " (disabled)"}` }));
   return items.length ? items : null;
+}
+
+async function selectDisabledServersToEnable(ctx: SelectableContext, config: Awaited<ReturnType<typeof readPiMcpConfig>>, disabled: string[]): Promise<string[]> {
+  return selectServers(ctx, config, disabled, "Select MCP servers to enable", "Enable selected");
+}
+
+async function selectServersToDisable(ctx: SelectableContext, config: Awaited<ReturnType<typeof readPiMcpConfig>>, enabled: string[]): Promise<string[]> {
+  return selectServers(ctx, config, enabled, "Select MCP servers to disable", "Disable selected");
+}
+
+async function selectServers(ctx: SelectableContext, config: Awaited<ReturnType<typeof readPiMcpConfig>>, names: string[], title: string, actionLabel: string): Promise<string[]> {
+  const selected = new Set<string>();
+
+  while (true) {
+    const options = [
+      ...names.map((name) => formatServerSelectionOption(name, config, selected.has(name))),
+      selected.size > 0 ? `${actionLabel} (${selected.size})` : actionLabel,
+      "Cancel",
+    ];
+
+    const choice = await ctx.ui.select(title, options);
+    if (!choice || choice === "Cancel") return [];
+    if (choice.startsWith(actionLabel)) return [...selected].sort();
+
+    const serverName = parseServerNameFromSelection(choice);
+    if (!serverName) continue;
+    if (selected.has(serverName)) selected.delete(serverName);
+    else selected.add(serverName);
+  }
+}
+
+function formatServerSelectionOption(name: string, config: Awaited<ReturnType<typeof readPiMcpConfig>>, selected: boolean): string {
+  const server = config.servers[name];
+  const source = server.source ? ` source=${server.source}` : "";
+  return `${selected ? "[✓]" : "[ ]"} ${name}${source} command=${server.command}`;
+}
+
+function parseServerNameFromSelection(choice: string): string | null {
+  const match = /^\[[ ✓]\] (\S+)/.exec(choice);
+  return match?.[1] ?? null;
+}
+
+interface SelectableContext {
+  ui: {
+    select(title: string, options: string[]): Promise<string | undefined>;
+  };
+}
+
+function hasSelectableUi(ctx: unknown): ctx is SelectableContext {
+  const maybeCtx = ctx as { hasUI?: boolean; ui?: { select?: unknown } };
+  return maybeCtx.hasUI !== false && typeof maybeCtx.ui?.select === "function";
 }
 
 function parseServerArg(args: string, usage: string): { ok: true; name: string } | { ok: false; message: string } {

@@ -27,12 +27,12 @@ Current implementation covers Phase 1 through Phase 4:
 ```text
 /mcp-sync
 /mcp-status
-/mcp-enable <server>
-/mcp-disable <server>
+/mcp-enable [server]
+/mcp-disable [server]
 /mcp-restart
 ```
 
-`/mcp-enable` updates `~/.pi/mcp.json` and immediately attempts to start that enabled server. `/mcp-disable` stops the server and deactivates its Pi tools. `/mcp-restart` restarts one enabled server or all enabled servers.
+`/mcp-enable <server>` updates `~/.pi/mcp.json` and immediately attempts to start that enabled server. In interactive Pi sessions, `/mcp-enable` with no argument rescans detected MCP configs, opens a small selector for disabled servers, and enables the selected servers. `/mcp-disable <server>` stops the server and deactivates its Pi tools. In interactive Pi sessions, `/mcp-disable` with no argument opens a small selector for enabled servers and disables the selected servers. `/mcp-restart` restarts one enabled server or all enabled servers.
 
 ## Config hardening
 

@@ -122,6 +122,10 @@ export function listEnabledServerNames(config: PiMcpConfig): string[] {
   return listServerNames(config).filter((name) => config.servers[name].enabled);
 }
 
+export function listDisabledServerNames(config: PiMcpConfig): string[] {
+  return listServerNames(config).filter((name) => !config.servers[name].enabled);
+}
+
 export function validateServerName(name: string): void {
   if (!name.trim()) throw new Error("MCP server name is required.");
   if (/\s/.test(name)) throw new Error(`Invalid MCP server name: ${name}. Server names cannot contain whitespace.`);

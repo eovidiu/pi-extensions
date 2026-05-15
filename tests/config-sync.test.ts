@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { readEffectivePiMcpConfig, readPiMcpConfig, syncPiMcpConfig } from "../extensions/mcp-sync-bridge/config-sync.js";
+import { listDisabledServerNames, readEffectivePiMcpConfig, readPiMcpConfig, syncPiMcpConfig } from "../extensions/mcp-sync-bridge/config-sync.js";
 import { MANAGED_BY, type DiscoveredMcpServer } from "../extensions/mcp-sync-bridge/types.js";
 
 let dirs: string[] = [];
@@ -57,5 +57,19 @@ describe("syncPiMcpConfig", () => {
     expect(config.maxOutputChars).toBe(123);
     expect(config.servers.shared.command).toBe("project");
     expect(config.servers.shared.enabled).toBe(true);
+  });
+
+  it("lists disabled server names in sorted order", () => {
+    const disabled = listDisabledServerNames({
+      version: 1,
+      autoStart: false,
+      servers: {
+        z_disabled: { enabled: false, command: "z" },
+        a_enabled: { enabled: true, command: "a" },
+        b_disabled: { enabled: false, command: "b" },
+      },
+    });
+
+    expect(disabled).toEqual(["b_disabled", "z_disabled"]);
   });
 });

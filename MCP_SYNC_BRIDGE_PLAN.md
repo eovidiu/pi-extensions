@@ -215,8 +215,8 @@ Register operational commands so execution is explicit and inspectable:
 ```text
 /mcp-sync
 /mcp-status
-/mcp-enable <server>
-/mcp-disable <server>
+/mcp-enable [server]
+/mcp-disable [server]
 /mcp-restart [server]
 ```
 
@@ -224,8 +224,10 @@ Command behavior:
 
 - `/mcp-sync`: rescan external configs and update `~/.pi/mcp.json`; does not enable new servers.
 - `/mcp-status`: show discovered servers, enabled/disabled state, connection state, and registered tools.
-- `/mcp-enable <server>`: mark a server enabled; starting may happen immediately or on restart/reload depending on implementation.
+- `/mcp-enable <server>`: mark a server enabled and start/register its tools immediately.
+- `/mcp-enable`: in interactive Pi sessions, rescan detected configs and open a selector for disabled detected servers.
 - `/mcp-disable <server>`: mark a server disabled, unregister/hide tools where possible, and stop its process.
+- `/mcp-disable`: in interactive Pi sessions, open a selector for enabled servers and disable the selected servers.
 - `/mcp-restart [server]`: restart one enabled server or all enabled servers.
 
 ## MCP bridge behavior
@@ -356,8 +358,8 @@ The extension should:
 
 ### Phase 3 — explicit enablement controls
 
-- Add `/mcp-enable <server>`.
-- Add `/mcp-disable <server>`.
+- Add `/mcp-enable <server>` and interactive `/mcp-enable` selector.
+- Add `/mcp-disable <server>` and interactive `/mcp-disable` selector.
 - Add `/mcp-restart [server]`.
 - Validate server names.
 - Update `~/.pi/mcp.json` atomically from commands.
@@ -429,5 +431,5 @@ Manual testing in Pi:
 1. Install the local package with `pi install /Users/fameftimie/work/pi-extensions`.
 2. Run `/mcp-sync`.
 3. Inspect `/mcp-status` and `~/.pi/mcp.json`.
-4. Enable one trusted server with `/mcp-enable <server>`.
+4. Enable trusted servers with `/mcp-enable` or `/mcp-enable <server>`.
 5. Ask Pi to use one of the registered MCP tools.
