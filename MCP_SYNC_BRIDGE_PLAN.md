@@ -418,15 +418,15 @@ Security note: Pi packages run with full system permissions. Review extension so
 - Phase 1: complete — package skeleton and initial extension are in place.
 - Phase 2: complete — config discovery/sync writes `~/.pi/mcp.json` safely and defaults discovered servers to disabled.
 - Phase 3: complete — explicit enable/disable/restart controls validate server names, preserve the no-autostart invariant, and serialize in-process config mutations.
+- Phase 4: complete — enabled stdio MCP servers are started, tools are listed, supported schemas are converted, Pi tools are registered, and calls are forwarded to MCP `tools/call`.
 
 ## Immediate next step
 
-Start **Phase 4** only:
+Start **Phase 5** hardening:
 
-1. Start stdio MCP servers for enabled servers only.
-2. Initialize MCP sessions.
-3. List MCP tools.
-4. Convert supported input schemas.
-5. Register Pi tools.
-6. Forward Pi tool calls.
-7. Keep disabled/newly discovered servers inert.
+1. Improve schema conversion coverage.
+2. Add server allow/deny filters.
+3. Add per-project overrides via `.pi/mcp.json`.
+4. Improve TUI status display.
+5. Add fixtures/tests for known Claude Desktop, Claude Code, and Codex config shapes.
+6. Add robust truncation for large MCP tool outputs.

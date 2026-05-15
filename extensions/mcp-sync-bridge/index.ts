@@ -12,16 +12,32 @@ import {
   validateServerName,
 } from "./config-sync.js";
 import { getLogPath, logDebug } from "./logger.js";
+import { McpBridgeRuntime } from "./mcp-client.js";
+import { McpToolRegistrar } from "./tool-registration.js";
 
 export default function mcpSyncBridge(pi: ExtensionAPI) {
+  const runtime = new McpBridgeRuntime();
+  const registrar = new McpToolRegistrar(pi, runtime);
+
   pi.on("session_start", async (_event, ctx) => {
     try {
       const result = await runSync();
-      notify(ctx, `MCP sync complete: ${result.discoveredCount} discovered, ${result.added.length} added, ${result.removed.length} removed. New servers are disabled by default.`);
+      const config = await readPiMcpConfig();
+      const registered = await startEnabledAndRegister(runtime, registrar, config);
+      notify(ctx, [
+        `MCP sync complete: ${result.discoveredCount} discovered, ${result.added.length} added, ${result.removed.length} removed.`,
+        "New servers are disabled by default.",
+        `Enabled MCP tools active: ${registered.length}`,
+      ].join("\n"));
     } catch (error) {
-      await logDebug("MCP sync failed on session_start", { error: errorMessage(error) });
-      notify(ctx, `MCP sync failed. See ${getLogPath()}`, "error");
+      await logDebug("MCP startup failed on session_start", { error: errorMessage(error) });
+      notify(ctx, `MCP startup failed. See ${getLogPath()}`, "error");
     }
+  });
+
+  pi.on("session_shutdown", async () => {
+    registrar.deactivateAll();
+    await runtime.stopAll();
   });
 
   pi.registerCommand("mcp-sync", {
@@ -29,14 +45,17 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       try {
         const result = await runSync();
+        const config = await readPiMcpConfig();
+        const registered = await startEnabledAndRegister(runtime, registrar, config);
         notify(ctx, [
           `MCP sync complete. Config: ${result.configPath}`,
           `Discovered: ${result.discoveredCount}`,
           `Added: ${result.added.length ? result.added.join(", ") : "none"}`,
           `Updated: ${result.updated.length}`,
           `Removed: ${result.removed.length ? result.removed.join(", ") : "none"}`,
-          `Enabled: ${result.enabled.length}`,
-          `Disabled: ${result.disabled.length}`,
+          `Enabled servers: ${result.enabled.length}`,
+          `Disabled servers: ${result.disabled.length}`,
+          `Active MCP tools: ${registered.length}`,
           `Log: ${getLogPath()}`,
         ].join("\n"));
       } catch (error) {
@@ -57,7 +76,7 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
           summarizeConfig(config),
           "",
           `Enabled servers: ${enabled.length ? enabled.join(", ") : "none"}`,
-          "Bridge state: MCP server startup/tool registration not implemented yet.",
+          runtime.getConnectionSummary(),
           `Log: ${getLogPath()}`,
         ].join("\n"));
       } catch (error) {
@@ -68,7 +87,7 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("mcp-enable", {
-    description: "Enable an MCP server by name. This updates config only until the bridge phase starts enabled servers.",
+    description: "Enable and start an MCP server by name",
     getArgumentCompletions: serverNameCompletions,
     handler: async (args, ctx) => {
       const parsed = parseServerArg(args, "/mcp-enable <server>");
@@ -78,8 +97,9 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
       }
       try {
         const result = await setServerEnabled(parsed.name, true);
-        const already = result.changed ? "Enabled" : "Already enabled";
-        notify(ctx, `${already} ${parsed.name} in ${PI_MCP_CONFIG_PATH}. MCP process startup is not implemented until the bridge phase.`);
+        const registered = await startEnabledAndRegister(runtime, registrar, result.config);
+        const status = result.changed ? "Enabled" : "Already enabled";
+        notify(ctx, `${status} ${parsed.name}. Active MCP tools: ${registered.length}.`);
       } catch (error) {
         await logDebug("/mcp-enable failed", { name: parsed.name, error: errorMessage(error) });
         notify(ctx, errorMessage(error), "error");
@@ -88,7 +108,7 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("mcp-disable", {
-    description: "Disable an MCP server by name",
+    description: "Disable and stop an MCP server by name",
     getArgumentCompletions: serverNameCompletions,
     handler: async (args, ctx) => {
       const parsed = parseServerArg(args, "/mcp-disable <server>");
@@ -98,8 +118,10 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
       }
       try {
         const result = await setServerEnabled(parsed.name, false);
-        const already = result.changed ? "Disabled" : "Already disabled";
-        notify(ctx, `${already} ${parsed.name} in ${PI_MCP_CONFIG_PATH}.`);
+        const removed = await runtime.stopServer(parsed.name);
+        registrar.deactivateTools(removed);
+        const status = result.changed ? "Disabled" : "Already disabled";
+        notify(ctx, `${status} ${parsed.name}. Deactivated MCP tools: ${removed.length}.`);
       } catch (error) {
         await logDebug("/mcp-disable failed", { name: parsed.name, error: errorMessage(error) });
         notify(ctx, errorMessage(error), "error");
@@ -108,7 +130,7 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("mcp-restart", {
-    description: "Validate restart target. Actual restart is deferred until MCP stdio bridge is implemented.",
+    description: "Restart one enabled MCP server or all enabled MCP servers",
     getArgumentCompletions: serverNameCompletions,
     handler: async (args, ctx) => {
       try {
@@ -116,16 +138,22 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
         const name = args.trim();
         if (name) {
           validateServerName(name);
-          const server = getServerOrThrow(config, name);
-          const enabledNote = server.enabled ? "would restart when bridge is implemented" : "is disabled; enable it before bridge startup";
-          notify(ctx, `Validated ${name}: ${enabledNote}. No MCP process was started.`, "warn");
+          getServerOrThrow(config, name);
+          const removed = await runtime.stopServer(name);
+          registrar.deactivateTools(removed);
+          await runtime.restartServer(name, config);
+          const active = await registrar.registerBindings(runtime.getToolBindings());
+          notify(ctx, `Restarted ${name}. Active MCP tools: ${active.length}.`);
           return;
         }
 
         const enabled = listEnabledServerNames(config);
+        const removed = await runtime.stopAll();
+        registrar.deactivateTools(removed);
+        const active = await startEnabledAndRegister(runtime, registrar, config);
         notify(ctx, enabled.length
-          ? `Validated restart for enabled servers: ${enabled.join(", ")}. No MCP processes were started; bridge phase is not implemented yet.`
-          : "No enabled MCP servers to restart. No MCP processes were started.", "warn");
+          ? `Restarted enabled MCP servers: ${enabled.join(", ")}. Active MCP tools: ${active.length}.`
+          : "No enabled MCP servers to restart.");
       } catch (error) {
         await logDebug("/mcp-restart failed", { args, error: errorMessage(error) });
         notify(ctx, errorMessage(error), "error");
@@ -138,6 +166,13 @@ async function runSync() {
   const discovery = await discoverMcpServers();
   await logDebug("MCP discovery complete", discovery.events);
   return syncPiMcpConfig(discovery.servers);
+}
+
+async function startEnabledAndRegister(runtime: McpBridgeRuntime, registrar: McpToolRegistrar, config: Awaited<ReturnType<typeof readPiMcpConfig>>): Promise<string[]> {
+  const removed = await runtime.stopNotEnabled(config);
+  registrar.deactivateTools(removed);
+  const bindings = await runtime.startEnabled(config);
+  return registrar.registerBindings(bindings);
 }
 
 async function serverNameCompletions(prefix: string) {
