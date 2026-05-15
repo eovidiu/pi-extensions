@@ -413,12 +413,20 @@ For ongoing development, installing the local package is preferred because it ke
 
 Security note: Pi packages run with full system permissions. Review extension source before installing third-party packages.
 
+## Implementation status
+
+- Phase 1: complete — package skeleton and initial extension are in place.
+- Phase 2: complete — config discovery/sync writes `~/.pi/mcp.json` safely and defaults discovered servers to disabled.
+- Phase 3: complete — explicit enable/disable/restart controls validate server names, preserve the no-autostart invariant, and serialize in-process config mutations.
+
 ## Immediate next step
 
-Start with **Phase 1 + Phase 2** only:
+Start **Phase 4** only:
 
-1. Create the local package skeleton.
-2. Implement config discovery/sync.
-3. Write `~/.pi/mcp.json` safely.
-4. Keep all discovered servers disabled by default.
-5. Do not start MCP servers or register MCP tools yet.
+1. Start stdio MCP servers for enabled servers only.
+2. Initialize MCP sessions.
+3. List MCP tools.
+4. Convert supported input schemas.
+5. Register Pi tools.
+6. Forward Pi tool calls.
+7. Keep disabled/newly discovered servers inert.

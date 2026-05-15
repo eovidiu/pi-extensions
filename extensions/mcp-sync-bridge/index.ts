@@ -1,6 +1,16 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { discoverMcpServers } from "./config-discovery.js";
-import { PI_MCP_CONFIG_PATH, readPiMcpConfig, setServerEnabled, summarizeConfig, syncPiMcpConfig } from "./config-sync.js";
+import {
+  getServerOrThrow,
+  listEnabledServerNames,
+  listServerNames,
+  PI_MCP_CONFIG_PATH,
+  readPiMcpConfig,
+  setServerEnabled,
+  summarizeConfig,
+  syncPiMcpConfig,
+  validateServerName,
+} from "./config-sync.js";
 import { getLogPath, logDebug } from "./logger.js";
 
 export default function mcpSyncBridge(pi: ExtensionAPI) {
@@ -41,7 +51,15 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       try {
         const config = await readPiMcpConfig();
-        notify(ctx, `Pi MCP config: ${PI_MCP_CONFIG_PATH}\n${summarizeConfig(config)}\n\nLog: ${getLogPath()}`);
+        const enabled = listEnabledServerNames(config);
+        notify(ctx, [
+          `Pi MCP config: ${PI_MCP_CONFIG_PATH}`,
+          summarizeConfig(config),
+          "",
+          `Enabled servers: ${enabled.length ? enabled.join(", ") : "none"}`,
+          "Bridge state: MCP server startup/tool registration not implemented yet.",
+          `Log: ${getLogPath()}`,
+        ].join("\n"));
       } catch (error) {
         await logDebug("/mcp-status failed", { error: errorMessage(error) });
         notify(ctx, `MCP status failed. See ${getLogPath()}`, "error");
@@ -50,18 +68,20 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("mcp-enable", {
-    description: "Enable an MCP server by name. Phase 2 only updates config; it does not start the server yet.",
+    description: "Enable an MCP server by name. This updates config only until the bridge phase starts enabled servers.",
+    getArgumentCompletions: serverNameCompletions,
     handler: async (args, ctx) => {
-      const name = args.trim();
-      if (!name) {
-        notify(ctx, "Usage: /mcp-enable <server>", "error");
+      const parsed = parseServerArg(args, "/mcp-enable <server>");
+      if (!parsed.ok) {
+        notify(ctx, parsed.message, "error");
         return;
       }
       try {
-        await setServerEnabled(name, true);
-        notify(ctx, `Enabled ${name} in ${PI_MCP_CONFIG_PATH}. MCP process startup is not implemented until the bridge phase.`);
+        const result = await setServerEnabled(parsed.name, true);
+        const already = result.changed ? "Enabled" : "Already enabled";
+        notify(ctx, `${already} ${parsed.name} in ${PI_MCP_CONFIG_PATH}. MCP process startup is not implemented until the bridge phase.`);
       } catch (error) {
-        await logDebug("/mcp-enable failed", { name, error: errorMessage(error) });
+        await logDebug("/mcp-enable failed", { name: parsed.name, error: errorMessage(error) });
         notify(ctx, errorMessage(error), "error");
       }
     },
@@ -69,26 +89,47 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
 
   pi.registerCommand("mcp-disable", {
     description: "Disable an MCP server by name",
+    getArgumentCompletions: serverNameCompletions,
     handler: async (args, ctx) => {
-      const name = args.trim();
-      if (!name) {
-        notify(ctx, "Usage: /mcp-disable <server>", "error");
+      const parsed = parseServerArg(args, "/mcp-disable <server>");
+      if (!parsed.ok) {
+        notify(ctx, parsed.message, "error");
         return;
       }
       try {
-        await setServerEnabled(name, false);
-        notify(ctx, `Disabled ${name} in ${PI_MCP_CONFIG_PATH}.`);
+        const result = await setServerEnabled(parsed.name, false);
+        const already = result.changed ? "Disabled" : "Already disabled";
+        notify(ctx, `${already} ${parsed.name} in ${PI_MCP_CONFIG_PATH}.`);
       } catch (error) {
-        await logDebug("/mcp-disable failed", { name, error: errorMessage(error) });
+        await logDebug("/mcp-disable failed", { name: parsed.name, error: errorMessage(error) });
         notify(ctx, errorMessage(error), "error");
       }
     },
   });
 
   pi.registerCommand("mcp-restart", {
-    description: "Restart MCP servers. Placeholder until MCP stdio bridge is implemented.",
-    handler: async (_args, ctx) => {
-      notify(ctx, "MCP restart is not implemented yet. Phase 2 sync/config commands are available; server startup comes in the bridge phase.", "warn");
+    description: "Validate restart target. Actual restart is deferred until MCP stdio bridge is implemented.",
+    getArgumentCompletions: serverNameCompletions,
+    handler: async (args, ctx) => {
+      try {
+        const config = await readPiMcpConfig();
+        const name = args.trim();
+        if (name) {
+          validateServerName(name);
+          const server = getServerOrThrow(config, name);
+          const enabledNote = server.enabled ? "would restart when bridge is implemented" : "is disabled; enable it before bridge startup";
+          notify(ctx, `Validated ${name}: ${enabledNote}. No MCP process was started.`, "warn");
+          return;
+        }
+
+        const enabled = listEnabledServerNames(config);
+        notify(ctx, enabled.length
+          ? `Validated restart for enabled servers: ${enabled.join(", ")}. No MCP processes were started; bridge phase is not implemented yet.`
+          : "No enabled MCP servers to restart. No MCP processes were started.", "warn");
+      } catch (error) {
+        await logDebug("/mcp-restart failed", { args, error: errorMessage(error) });
+        notify(ctx, errorMessage(error), "error");
+      }
     },
   });
 }
@@ -97,6 +138,28 @@ async function runSync() {
   const discovery = await discoverMcpServers();
   await logDebug("MCP discovery complete", discovery.events);
   return syncPiMcpConfig(discovery.servers);
+}
+
+async function serverNameCompletions(prefix: string) {
+  const config = await readPiMcpConfig();
+  const lower = prefix.toLowerCase();
+  const items = listServerNames(config)
+    .filter((name) => name.toLowerCase().startsWith(lower) || name.toLowerCase().includes(lower))
+    .map((name) => ({ value: name, label: `${name}${config.servers[name].enabled ? " (enabled)" : " (disabled)"}` }));
+  return items.length ? items : null;
+}
+
+function parseServerArg(args: string, usage: string): { ok: true; name: string } | { ok: false; message: string } {
+  const trimmed = args.trim();
+  if (!trimmed) return { ok: false, message: `Usage: ${usage}` };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length !== 1) return { ok: false, message: `Usage: ${usage}` };
+  try {
+    validateServerName(parts[0]);
+    return { ok: true, name: parts[0] };
+  } catch (error) {
+    return { ok: false, message: errorMessage(error) };
+  }
 }
 
 function notify(ctx: unknown, message: string, level: "info" | "warn" | "error" = "info") {

@@ -6,6 +6,8 @@ import { logDebug } from "./logger.js";
 
 export const PI_MCP_CONFIG_PATH = join(homedir(), ".pi", "mcp.json");
 
+let mutationQueue: Promise<unknown> = Promise.resolve();
+
 export async function readPiMcpConfig(path = PI_MCP_CONFIG_PATH): Promise<PiMcpConfig> {
   try {
     const text = await readFile(path, "utf8");
@@ -21,82 +23,133 @@ export async function readPiMcpConfig(path = PI_MCP_CONFIG_PATH): Promise<PiMcpC
 }
 
 export async function syncPiMcpConfig(discovered: Record<string, DiscoveredMcpServer>, path = PI_MCP_CONFIG_PATH): Promise<SyncResult> {
-  const existing = await readPiMcpConfig(path);
-  const next: PiMcpConfig = {
-    version: 1,
-    autoStart: existing.autoStart === true,
-    servers: {},
-  };
-
-  const added: string[] = [];
-  const updated: string[] = [];
-  const removed: string[] = [];
-  const preservedManual: string[] = [];
-
-  for (const [name, server] of Object.entries(existing.servers)) {
-    if (server.managedBy === MANAGED_BY) {
-      if (!discovered[name]) removed.push(name);
-      continue;
-    }
-    next.servers[name] = server;
-    preservedManual.push(name);
-  }
-
-  for (const [name, server] of Object.entries(discovered)) {
-    const previous = existing.servers[name];
-    const enabled = previous?.managedBy === MANAGED_BY ? previous.enabled === true : false;
-    next.servers[name] = {
-      enabled,
-      managedBy: MANAGED_BY,
-      source: server.source,
-      sourceName: server.sourceName,
-      command: server.command,
-      args: server.args ?? [],
-      env: server.env ?? {},
+  return withConfigMutation(async () => {
+    const existing = await readPiMcpConfig(path);
+    const next: PiMcpConfig = {
+      version: 1,
+      autoStart: existing.autoStart === true,
+      servers: {},
     };
-    if (previous?.managedBy === MANAGED_BY) updated.push(name);
-    else added.push(name);
-  }
 
-  await writeJsonAtomic(path, next);
+    const added: string[] = [];
+    const updated: string[] = [];
+    const removed: string[] = [];
+    const preservedManual: string[] = [];
 
-  const enabled = Object.entries(next.servers).filter(([, s]) => s.enabled).map(([name]) => name);
-  const disabled = Object.entries(next.servers).filter(([, s]) => !s.enabled).map(([name]) => name);
+    for (const [name, server] of Object.entries(existing.servers)) {
+      if (server.managedBy === MANAGED_BY) {
+        if (!discovered[name]) removed.push(name);
+        continue;
+      }
+      next.servers[name] = server;
+      preservedManual.push(name);
+    }
 
-  const result: SyncResult = {
-    configPath: path,
-    discoveredCount: Object.keys(discovered).length,
-    added,
-    updated,
-    removed,
-    preservedManual,
-    enabled,
-    disabled,
-  };
-  await logDebug("Synced Pi MCP config", result);
-  return result;
+    for (const [name, server] of Object.entries(discovered)) {
+      const previous = existing.servers[name];
+      const enabled = previous?.managedBy === MANAGED_BY ? previous.enabled === true : false;
+      next.servers[name] = {
+        enabled,
+        managedBy: MANAGED_BY,
+        source: server.source,
+        sourceName: server.sourceName,
+        command: server.command,
+        args: server.args ?? [],
+        env: server.env ?? {},
+      };
+      if (previous?.managedBy === MANAGED_BY) updated.push(name);
+      else added.push(name);
+    }
+
+    await writeJsonAtomic(path, next);
+
+    const enabled = Object.entries(next.servers).filter(([, s]) => s.enabled).map(([name]) => name);
+    const disabled = Object.entries(next.servers).filter(([, s]) => !s.enabled).map(([name]) => name);
+
+    const result: SyncResult = {
+      configPath: path,
+      discoveredCount: Object.keys(discovered).length,
+      added,
+      updated,
+      removed,
+      preservedManual,
+      enabled,
+      disabled,
+    };
+    await logDebug("Synced Pi MCP config", result);
+    return result;
+  });
 }
 
-export async function setServerEnabled(name: string, enabled: boolean, path = PI_MCP_CONFIG_PATH): Promise<PiMcpConfig> {
-  const config = await readPiMcpConfig(path);
+export interface SetServerEnabledResult {
+  config: PiMcpConfig;
+  server: McpServerConfig;
+  changed: boolean;
+}
+
+export async function setServerEnabled(name: string, enabled: boolean, path = PI_MCP_CONFIG_PATH): Promise<SetServerEnabledResult> {
+  return withConfigMutation(async () => {
+    const config = await readPiMcpConfig(path);
+    const server = getServerOrThrow(config, name);
+    const changed = server.enabled !== enabled;
+    config.servers[name] = { ...server, enabled };
+    await writeJsonAtomic(path, config);
+    await logDebug(enabled ? "Enabled MCP server" : "Disabled MCP server", { name, changed });
+    return { config, server: config.servers[name], changed };
+  });
+}
+
+export function getServerOrThrow(config: PiMcpConfig, name: string): McpServerConfig {
+  validateServerName(name);
   const server = config.servers[name];
-  if (!server) throw new Error(`Unknown MCP server: ${name}`);
-  config.servers[name] = { ...server, enabled };
-  await writeJsonAtomic(path, config);
-  await logDebug(enabled ? "Enabled MCP server" : "Disabled MCP server", { name });
-  return config;
+  if (!server) {
+    const suggestions = suggestServerNames(config, name);
+    const hint = suggestions.length ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+    throw new Error(`Unknown MCP server: ${name}.${hint}`);
+  }
+  return server;
+}
+
+export function listServerNames(config: PiMcpConfig): string[] {
+  return Object.keys(config.servers).sort();
+}
+
+export function listEnabledServerNames(config: PiMcpConfig): string[] {
+  return listServerNames(config).filter((name) => config.servers[name].enabled);
+}
+
+export function validateServerName(name: string): void {
+  if (!name.trim()) throw new Error("MCP server name is required.");
+  if (/\s/.test(name)) throw new Error(`Invalid MCP server name: ${name}. Server names cannot contain whitespace.`);
+  if (!/^[A-Za-z0-9_][-A-Za-z0-9_.:]*$/.test(name)) {
+    throw new Error(`Invalid MCP server name: ${name}.`);
+  }
 }
 
 export function summarizeConfig(config: PiMcpConfig): string {
-  const names = Object.keys(config.servers).sort();
+  const names = listServerNames(config);
   if (names.length === 0) return "No MCP servers configured.";
   return names
     .map((name) => {
       const server = config.servers[name];
-      const source = server.source ? ` (${server.source})` : "";
-      return `${server.enabled ? "enabled " : "disabled"} ${name}${source}`;
+      const source = server.source ? ` source=${server.source}` : "";
+      const managed = server.managedBy === MANAGED_BY ? "managed" : "manual";
+      return `${server.enabled ? "enabled " : "disabled"} ${name} [${managed}${source}] command=${server.command}`;
     })
     .join("\n");
+}
+
+function suggestServerNames(config: PiMcpConfig, input: string): string[] {
+  const normalizedInput = input.toLowerCase();
+  return listServerNames(config)
+    .filter((name) => name.toLowerCase().includes(normalizedInput) || normalizedInput.includes(name.toLowerCase()))
+    .slice(0, 5);
+}
+
+async function withConfigMutation<T>(fn: () => Promise<T>): Promise<T> {
+  const run = mutationQueue.then(fn, fn);
+  mutationQueue = run.catch(() => undefined);
+  return run;
 }
 
 async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
