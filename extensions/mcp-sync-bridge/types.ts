@@ -16,6 +16,9 @@ export interface PiMcpConfig {
   version: 1;
   autoStart: boolean;
   servers: Record<string, McpServerConfig>;
+  allowServers?: string[];
+  denyServers?: string[];
+  maxOutputChars?: number;
 }
 
 export interface DiscoveredMcpServer extends McpServerConfig {

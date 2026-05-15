@@ -43,7 +43,7 @@ export class McpBridgeRuntime {
   }
 
   async startEnabled(config: PiMcpConfig): Promise<McpToolBinding[]> {
-    const enabled = Object.entries(config.servers).filter(([, server]) => server.enabled);
+    const enabled = Object.entries(config.servers).filter(([serverName, server]) => server.enabled && isServerAllowed(serverName, config));
     for (const [serverName, server] of enabled) {
       if (this.servers.has(serverName)) continue;
       try {
@@ -60,6 +60,7 @@ export class McpBridgeRuntime {
     const server = config.servers[serverName];
     if (!server) throw new Error(`Unknown MCP server: ${serverName}`);
     if (!server.enabled) throw new Error(`MCP server is disabled: ${serverName}`);
+    if (!isServerAllowed(serverName, config)) throw new Error(`MCP server is blocked by allow/deny filters: ${serverName}`);
     await this.startServer(serverName, server);
     return this.getToolBindings();
   }
@@ -153,6 +154,23 @@ function normalizeToolName(value: string): string {
 
 function shortHash(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 6);
+}
+
+function isServerAllowed(serverName: string, config: PiMcpConfig): boolean {
+  if (config.allowServers?.length && !config.allowServers.some((pattern) => matchesPattern(serverName, pattern))) return false;
+  if (config.denyServers?.some((pattern) => matchesPattern(serverName, pattern))) return false;
+  return true;
+}
+
+function matchesPattern(value: string, pattern: string): boolean {
+  if (pattern === "*" || pattern === value) return true;
+  if (!pattern.includes("*")) return false;
+  const escaped = pattern.split("*").map(escapeRegExp).join(".*");
+  return new RegExp(`^${escaped}$`).test(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function errorMessage(error: unknown): string {

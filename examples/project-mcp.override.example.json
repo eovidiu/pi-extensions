@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "autoStart": false,
+  "maxOutputChars": 20000,
+  "allowServers": ["claude_desktop__filesystem", "codex__playwright"],
+  "denyServers": ["*production*"],
+  "servers": {
+    "manual__project_local": {
+      "enabled": false,
+      "source": "manual",
+      "sourceName": "project-local",
+      "command": "example-mcp-server",
+      "args": [],
+      "env": {}
+    }
+  }
+}

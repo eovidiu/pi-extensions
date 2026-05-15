@@ -5,6 +5,8 @@ import {
   listEnabledServerNames,
   listServerNames,
   PI_MCP_CONFIG_PATH,
+  PROJECT_MCP_CONFIG_PATH,
+  readEffectivePiMcpConfig,
   readPiMcpConfig,
   setServerEnabled,
   summarizeConfig,
@@ -22,7 +24,7 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     try {
       const result = await runSync();
-      const config = await readPiMcpConfig();
+      const config = await readEffectivePiMcpConfig();
       const registered = await startEnabledAndRegister(runtime, registrar, config);
       notify(ctx, [
         `MCP sync complete: ${result.discoveredCount} discovered, ${result.added.length} added, ${result.removed.length} removed.`,
@@ -45,7 +47,7 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       try {
         const result = await runSync();
-        const config = await readPiMcpConfig();
+        const config = await readEffectivePiMcpConfig();
         const registered = await startEnabledAndRegister(runtime, registrar, config);
         notify(ctx, [
           `MCP sync complete. Config: ${result.configPath}`,
@@ -69,10 +71,11 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
     description: "Show MCP servers tracked by the Pi MCP sync bridge",
     handler: async (_args, ctx) => {
       try {
-        const config = await readPiMcpConfig();
+        const config = await readEffectivePiMcpConfig();
         const enabled = listEnabledServerNames(config);
         notify(ctx, [
           `Pi MCP config: ${PI_MCP_CONFIG_PATH}`,
+          `Project override: ${PROJECT_MCP_CONFIG_PATH}`,
           summarizeConfig(config),
           "",
           `Enabled servers: ${enabled.length ? enabled.join(", ") : "none"}`,
@@ -97,7 +100,8 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
       }
       try {
         const result = await setServerEnabled(parsed.name, true);
-        const registered = await startEnabledAndRegister(runtime, registrar, result.config);
+        const config = await readEffectivePiMcpConfig();
+        const registered = await startEnabledAndRegister(runtime, registrar, config);
         const status = result.changed ? "Enabled" : "Already enabled";
         notify(ctx, `${status} ${parsed.name}. Active MCP tools: ${registered.length}.`);
       } catch (error) {
@@ -134,7 +138,7 @@ export default function mcpSyncBridge(pi: ExtensionAPI) {
     getArgumentCompletions: serverNameCompletions,
     handler: async (args, ctx) => {
       try {
-        const config = await readPiMcpConfig();
+        const config = await readEffectivePiMcpConfig();
         const name = args.trim();
         if (name) {
           validateServerName(name);
@@ -169,6 +173,7 @@ async function runSync() {
 }
 
 async function startEnabledAndRegister(runtime: McpBridgeRuntime, registrar: McpToolRegistrar, config: Awaited<ReturnType<typeof readPiMcpConfig>>): Promise<string[]> {
+  registrar.setMaxOutputChars(config.maxOutputChars);
   const removed = await runtime.stopNotEnabled(config);
   registrar.deactivateTools(removed);
   const bindings = await runtime.startEnabled(config);
@@ -176,7 +181,7 @@ async function startEnabledAndRegister(runtime: McpBridgeRuntime, registrar: Mcp
 }
 
 async function serverNameCompletions(prefix: string) {
-  const config = await readPiMcpConfig();
+  const config = await readEffectivePiMcpConfig();
   const lower = prefix.toLowerCase();
   const items = listServerNames(config)
     .filter((name) => name.toLowerCase().startsWith(lower) || name.toLowerCase().includes(lower))

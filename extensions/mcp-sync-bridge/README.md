@@ -18,6 +18,9 @@ Current implementation covers Phase 1 through Phase 4:
 - registers supported MCP tools as Pi tools
 - forwards Pi tool calls to MCP `tools/call`
 - stops/deactivates tools on disable, restart, and session shutdown
+- supports project-local `.pi/mcp.json` overrides
+- supports `allowServers`, `denyServers`, and `maxOutputChars`
+- includes fixtures/tests for hardening
 
 ## Commands
 
@@ -30,6 +33,18 @@ Current implementation covers Phase 1 through Phase 4:
 ```
 
 `/mcp-enable` updates `~/.pi/mcp.json` and immediately attempts to start that enabled server. `/mcp-disable` stops the server and deactivates its Pi tools. `/mcp-restart` restarts one enabled server or all enabled servers.
+
+## Config hardening
+
+Optional settings in `~/.pi/mcp.json` or project-local `.pi/mcp.json`:
+
+```json
+{
+  "allowServers": ["claude_desktop__filesystem", "codex__*"],
+  "denyServers": ["*production*"],
+  "maxOutputChars": 20000
+}
+```
 
 ## Safety invariant
 

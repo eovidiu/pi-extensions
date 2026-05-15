@@ -3,12 +3,32 @@
   "version": "0.1.0",
   "description": "Personal Pi extensions, starting with an opt-in MCP sync bridge.",
   "type": "module",
+  "homepage": "https://github.com/eovidiu/pi-extensions#readme",
+  "bugs": {
+    "url": "https://github.com/eovidiu/pi-extensions/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eovidiu/pi-extensions.git"
+  },
   "keywords": [
     "pi-package",
     "pi-extension",
     "mcp"
   ],
   "license": "MIT",
+  "files": [
+    "extensions",
+    "examples",
+    "fixtures",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
   "pi": {
     "extensions": [
       "./extensions/mcp-sync-bridge"
@@ -25,6 +45,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.8.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   }
 }

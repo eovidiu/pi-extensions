@@ -5,6 +5,7 @@ import { MANAGED_BY, type DiscoveredMcpServer, type McpServerConfig, type PiMcpC
 import { logDebug } from "./logger.js";
 
 export const PI_MCP_CONFIG_PATH = join(homedir(), ".pi", "mcp.json");
+export const PROJECT_MCP_CONFIG_PATH = join(process.cwd(), ".pi", "mcp.json");
 
 let mutationQueue: Promise<unknown> = Promise.resolve();
 
@@ -29,6 +30,9 @@ export async function syncPiMcpConfig(discovered: Record<string, DiscoveredMcpSe
       version: 1,
       autoStart: existing.autoStart === true,
       servers: {},
+      allowServers: existing.allowServers,
+      denyServers: existing.denyServers,
+      maxOutputChars: existing.maxOutputChars,
     };
 
     const added: string[] = [];
@@ -126,6 +130,29 @@ export function validateServerName(name: string): void {
   }
 }
 
+export async function readEffectivePiMcpConfig(homePath = PI_MCP_CONFIG_PATH, projectPath = PROJECT_MCP_CONFIG_PATH): Promise<PiMcpConfig> {
+  const home = await readPiMcpConfig(homePath);
+  if (projectPath === homePath) return home;
+  let project: PiMcpConfig | null = null;
+  try {
+    const text = await readFile(projectPath, "utf8");
+    project = normalizePiConfig(JSON.parse(text) as Partial<PiMcpConfig>);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      await logDebug("Failed to read project Pi MCP config; ignoring project overrides", { projectPath, error: errorMessage(error) });
+    }
+  }
+  if (!project) return home;
+  return {
+    version: 1,
+    autoStart: project.autoStart || home.autoStart,
+    allowServers: project.allowServers ?? home.allowServers,
+    denyServers: project.denyServers ?? home.denyServers,
+    maxOutputChars: project.maxOutputChars ?? home.maxOutputChars,
+    servers: { ...home.servers, ...project.servers },
+  };
+}
+
 export function summarizeConfig(config: PiMcpConfig): string {
   const names = listServerNames(config);
   if (names.length === 0) return "No MCP servers configured.";
@@ -179,12 +206,21 @@ function normalizePiConfig(parsed: Partial<PiMcpConfig>): PiMcpConfig {
   return {
     version: 1,
     autoStart: parsed.autoStart === true,
+    allowServers: normalizeStringArray(parsed.allowServers),
+    denyServers: normalizeStringArray(parsed.denyServers),
+    maxOutputChars: typeof parsed.maxOutputChars === "number" && parsed.maxOutputChars > 0 ? Math.floor(parsed.maxOutputChars) : undefined,
     servers,
   };
 }
 
 function emptyConfig(): PiMcpConfig {
   return { version: 1, autoStart: false, servers: {} };
+}
+
+function normalizeStringArray(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const values = raw.filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  return values.length ? values : undefined;
 }
 
 function normalizeEnv(raw: unknown): Record<string, string> {

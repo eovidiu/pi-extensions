@@ -7,7 +7,11 @@ export class McpToolRegistrar {
   private registered = new Set<string>();
   private active = new Set<string>();
 
-  constructor(private readonly pi: ExtensionAPI, private readonly runtime: McpBridgeRuntime) {}
+  constructor(private readonly pi: ExtensionAPI, private readonly runtime: McpBridgeRuntime, private maxOutputChars = 20_000) {}
+
+  setMaxOutputChars(maxOutputChars: number | undefined): void {
+    this.maxOutputChars = maxOutputChars && maxOutputChars > 0 ? maxOutputChars : 20_000;
+  }
 
   async registerBindings(bindings: McpToolBinding[]): Promise<string[]> {
     const activated: string[] = [];
@@ -55,7 +59,7 @@ export class McpToolRegistrar {
       execute: async (_toolCallId, params, signal) => {
         const result = await this.runtime.callTool(binding.piToolName, params as Record<string, unknown>, signal);
         return {
-          content: [{ type: "text", text: formatMcpResult(result) }],
+          content: [{ type: "text", text: truncateText(formatMcpResult(result), this.maxOutputChars) }],
           details: { serverName: binding.serverName, mcpToolName: binding.mcpToolName, result },
         };
       },
@@ -89,6 +93,12 @@ function formatMcpContent(content: unknown): string {
     if (typeof content.resource.uri === "string") return `[MCP resource: ${content.resource.uri}]`;
   }
   return stringify(content);
+}
+
+export function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const omitted = text.length - maxChars;
+  return `${text.slice(0, maxChars)}\n\n[Truncated ${omitted} characters from MCP tool output]`;
 }
 
 function stringify(value: unknown): string {

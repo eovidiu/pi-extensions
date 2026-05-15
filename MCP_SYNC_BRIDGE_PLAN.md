@@ -419,14 +419,15 @@ Security note: Pi packages run with full system permissions. Review extension so
 - Phase 2: complete — config discovery/sync writes `~/.pi/mcp.json` safely and defaults discovered servers to disabled.
 - Phase 3: complete — explicit enable/disable/restart controls validate server names, preserve the no-autostart invariant, and serialize in-process config mutations.
 - Phase 4: complete — enabled stdio MCP servers are started, tools are listed, supported schemas are converted, Pi tools are registered, and calls are forwarded to MCP `tools/call`.
+- Phase 5: complete — added allow/deny filters, project-local `.pi/mcp.json` overrides, output truncation, fixtures, and unit tests.
+- Phase 6: complete — expanded documentation, security notes, npm metadata, examples, and CI workflow.
 
 ## Immediate next step
 
-Start **Phase 5** hardening:
+Manual testing in Pi:
 
-1. Improve schema conversion coverage.
-2. Add server allow/deny filters.
-3. Add per-project overrides via `.pi/mcp.json`.
-4. Improve TUI status display.
-5. Add fixtures/tests for known Claude Desktop, Claude Code, and Codex config shapes.
-6. Add robust truncation for large MCP tool outputs.
+1. Install the local package with `pi install /Users/fameftimie/work/pi-extensions`.
+2. Run `/mcp-sync`.
+3. Inspect `/mcp-status` and `~/.pi/mcp.json`.
+4. Enable one trusted server with `/mcp-enable <server>`.
+5. Ask Pi to use one of the registered MCP tools.
