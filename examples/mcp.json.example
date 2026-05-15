@@ -4,7 +4,7 @@
   "servers": {
     "claude_desktop__filesystem": {
       "enabled": false,
-      "managedBy": "pi-mcp-sync-bridge",
+      "managedBy": "pi-mcp-bridge",
       "source": "claude-desktop",
       "sourceName": "filesystem",
       "command": "npx",

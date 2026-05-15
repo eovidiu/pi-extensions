@@ -2,8 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { listDisabledServerNames, readEffectivePiMcpConfig, readPiMcpConfig, syncPiMcpConfig } from "../extensions/mcp-sync-bridge/config-sync.js";
-import { MANAGED_BY, type DiscoveredMcpServer } from "../extensions/mcp-sync-bridge/types.js";
+import { listDisabledServerNames, readEffectivePiMcpConfig, readPiMcpConfig, syncPiMcpConfig } from "../extensions/mcp-bridge/config-sync.js";
+import { MANAGED_BY, type DiscoveredMcpServer } from "../extensions/mcp-bridge/types.js";
 
 let dirs: string[] = [];
 

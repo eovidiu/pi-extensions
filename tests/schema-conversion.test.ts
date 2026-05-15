@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertMcpInputSchema } from "../extensions/mcp-sync-bridge/schema-conversion.js";
+import { convertMcpInputSchema } from "../extensions/mcp-bridge/schema-conversion.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;

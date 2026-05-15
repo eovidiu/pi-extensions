@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
 const SECRET_KEY = /(TOKEN|KEY|SECRET|PASSWORD|PASSWD|AUTH|CREDENTIAL|PRIVATE)/i;
-const LOG_PATH = join(homedir(), ".pi", "mcp-sync-bridge.log");
+const LOG_PATH = join(homedir(), ".pi", "mcp-bridge.log");
 
 export function getLogPath(): string {
   return LOG_PATH;

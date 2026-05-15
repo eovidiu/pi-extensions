@@ -2,7 +2,7 @@
 
 Personal [Pi](https://pi.dev) extension package.
 
-This repository currently contains one extension: **`mcp-sync-bridge`**, an explicit opt-in MCP compatibility bridge for Pi.
+This repository currently contains one extension: **`mcp-bridge`**, an explicit opt-in MCP compatibility bridge for Pi.
 
 > Security note: Pi extensions run as local TypeScript with your user permissions. MCP servers started by this extension also run with your user permissions. Review the source and every MCP server command before enabling it.
 
@@ -30,7 +30,7 @@ The bridge never starts newly discovered MCP servers automatically. Discovery on
 - Supports interactive `/mcp-enable` and `/mcp-disable` selectors in Pi's TUI.
 - Supports project-local `.pi/mcp.json` overrides.
 - Supports `allowServers`, `denyServers`, and `maxOutputChars` hardening settings.
-- Writes detailed redacted diagnostics to `~/.pi/mcp-sync-bridge.log` instead of stdout.
+- Writes detailed redacted diagnostics to `~/.pi/mcp-bridge.log` instead of stdout.
 
 ## Installation
 
@@ -146,7 +146,7 @@ Example:
   "servers": {
     "claude_desktop__filesystem": {
       "enabled": false,
-      "managedBy": "pi-mcp-sync-bridge",
+      "managedBy": "pi-mcp-bridge",
       "source": "claude-desktop",
       "sourceName": "filesystem",
       "command": "npx",
@@ -160,7 +160,7 @@ Example:
 
 Rules:
 
-- Managed discovered entries have `managedBy: "pi-mcp-sync-bridge"`.
+- Managed discovered entries have `managedBy: "pi-mcp-bridge"`.
 - Managed entries may be updated or removed by `/mcp-sync` when source configs change.
 - Manual entries without that `managedBy` value are preserved.
 - Existing managed `enabled` values are preserved during sync.
@@ -227,7 +227,7 @@ The extension is implemented as a Pi package with this manifest in `package.json
 {
   "keywords": ["pi-package", "pi-extension", "mcp"],
   "pi": {
-    "extensions": ["./extensions/mcp-sync-bridge"]
+    "extensions": ["./extensions/mcp-bridge"]
   }
 }
 ```
@@ -236,13 +236,13 @@ Main modules:
 
 | File | Purpose |
 |---|---|
-| `extensions/mcp-sync-bridge/index.ts` | Pi extension entry point. Registers lifecycle hooks and slash commands. Starts/stops enabled servers and registers tools. |
+| `extensions/mcp-bridge/index.ts` | Pi extension entry point. Registers lifecycle hooks and slash commands. Starts/stops enabled servers and registers tools. |
 | `config-discovery.ts` | Finds and parses known third-party MCP config files. Normalizes discovered server definitions. |
 | `config-sync.ts` | Reads/writes `~/.pi/mcp.json`, merges discovered servers, preserves manual entries, validates names, and performs atomic writes. |
 | `mcp-client.ts` | Starts MCP stdio server processes, initializes MCP clients, lists tools, forwards calls, and stops processes. |
 | `schema-conversion.ts` | Converts supported MCP JSON Schema input schemas to Pi/typebox schemas. |
 | `tool-registration.ts` | Generates Pi tool names, registers MCP-backed tools, truncates large outputs, and deactivates tools when servers stop. |
-| `logger.ts` | Writes redacted diagnostic logs to `~/.pi/mcp-sync-bridge.log`. |
+| `logger.ts` | Writes redacted diagnostic logs to `~/.pi/mcp-bridge.log`. |
 | `types.ts` | Shared config and discovery types. |
 
 ### Startup/session lifecycle
@@ -318,7 +318,7 @@ MCP tool outputs can be large. The extension respects `maxOutputChars` and trunc
 The extension does not log to stdout because Pi owns stdout/TUI rendering. Detailed diagnostics go to:
 
 ```text
-~/.pi/mcp-sync-bridge.log
+~/.pi/mcp-bridge.log
 ```
 
 Logs redact common secret-bearing keys such as token, key, secret, password, auth, and credential. Still, avoid storing literal secrets in config files when possible.

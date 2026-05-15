@@ -1,4 +1,4 @@
-export const MANAGED_BY = "pi-mcp-sync-bridge";
+export const MANAGED_BY = "pi-mcp-bridge";
 
 export type McpSource = "claude-desktop" | "claude-code" | "codex" | "manual" | string;
 

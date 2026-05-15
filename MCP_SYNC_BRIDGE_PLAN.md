@@ -17,7 +17,7 @@ Package name suggestion:
 Initial extension:
 
 ```text
-mcp-sync-bridge
+mcp-bridge
 ```
 
 ## Goal
@@ -54,7 +54,7 @@ pi-extensions/
   tsconfig.json
 
   extensions/
-    mcp-sync-bridge/
+    mcp-bridge/
       index.ts
       config-discovery.ts
       config-sync.ts
@@ -78,7 +78,7 @@ pi-extensions/
   "version": "0.1.0",
   "keywords": ["pi-package", "pi-extension", "mcp"],
   "pi": {
-    "extensions": ["./extensions/mcp-sync-bridge"]
+    "extensions": ["./extensions/mcp-bridge"]
   }
 }
 ```
@@ -122,7 +122,7 @@ Shape:
   "servers": {
     "claude-code__filesystem": {
       "enabled": false,
-      "managedBy": "pi-mcp-sync-bridge",
+      "managedBy": "pi-mcp-bridge",
       "source": "claude-code",
       "sourceName": "filesystem",
       "command": "npx",
@@ -136,7 +136,7 @@ Shape:
 Rules:
 
 - Managed entries can be updated or removed by the sync.
-- Manual entries without `managedBy: "pi-mcp-sync-bridge"` are preserved.
+- Manual entries without `managedBy: "pi-mcp-bridge"` are preserved.
 - Newly discovered managed entries default to `enabled: false`.
 - Existing `enabled` values are preserved during sync.
 - MCP server processes are only started when `enabled: true` and global policy allows startup.
@@ -188,7 +188,7 @@ The first version will record, in a redacted debug log, which files were:
 Do not log to stdout. Pi owns stdout/TUI. Use `ctx.ui.notify()` for concise user-facing messages when `ctx.hasUI` is true, and write detailed logs to a file such as:
 
 ```text
-~/.pi/mcp-sync-bridge.log
+~/.pi/mcp-bridge.log
 ```
 
 ## Sync algorithm
@@ -340,7 +340,7 @@ The extension should:
 - Create `/Users/fameftimie/work/pi-extensions`.
 - Add `package.json`, `tsconfig.json`, `.gitignore`, and README.
 - Initialize local git repo.
-- Add explicit Pi package manifest path: `./extensions/mcp-sync-bridge`.
+- Add explicit Pi package manifest path: `./extensions/mcp-bridge`.
 - Add initial extension `index.ts` that registers `/mcp-status` and proves Pi can load the package.
 
 ### Phase 2 — config discovery/sync only
@@ -351,7 +351,7 @@ The extension should:
 - Preserve manual entries and existing `enabled` values.
 - Default newly discovered servers to `enabled: false`.
 - Add atomic writes.
-- Add redacted debug logging to `~/.pi/mcp-sync-bridge.log`.
+- Add redacted debug logging to `~/.pi/mcp-bridge.log`.
 - Add `/mcp-sync` and `/mcp-status` commands.
 - Do not start MCP servers.
 - Do not execute MCP tools.

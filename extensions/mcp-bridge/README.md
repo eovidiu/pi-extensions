@@ -1,4 +1,4 @@
-# mcp-sync-bridge
+# mcp-bridge
 
 Explicit opt-in MCP compatibility bridge for Pi.
 
@@ -9,7 +9,7 @@ Current implementation covers Phase 1 through Phase 4:
 - preserves manually added Pi MCP server entries
 - preserves `enabled` values for previously discovered managed entries
 - defaults newly discovered servers to `enabled: false`
-- writes a redacted debug log to `~/.pi/mcp-sync-bridge.log`
+- writes a redacted debug log to `~/.pi/mcp-bridge.log`
 - provides explicit enable/disable controls with server-name validation and completions
 - serializes in-process config mutations to avoid command-handler races
 - starts enabled MCP stdio servers only

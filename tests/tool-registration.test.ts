@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { truncateText } from "../extensions/mcp-sync-bridge/tool-registration.js";
+import { truncateText } from "../extensions/mcp-bridge/tool-registration.js";
 
 describe("truncateText", () => {
   it("leaves short text unchanged", () => {

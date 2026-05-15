@@ -124,7 +124,7 @@ export class McpBridgeRuntime {
       void logDebug("MCP server stderr", { serverName, stderr: String(chunk).slice(0, 4000) });
     });
 
-    const client = new Client({ name: "pi-mcp-sync-bridge", version: "0.1.0" }, { capabilities: {} });
+    const client = new Client({ name: "pi-mcp-bridge", version: "0.1.0" }, { capabilities: {} });
     await client.connect(transport);
     const listed = await client.listTools();
     const tools = listed.tools.map((tool) => ({
