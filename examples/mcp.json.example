@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "autoStart": false,
+  "servers": {
+    "claude_desktop__filesystem": {
+      "enabled": false,
+      "managedBy": "pi-mcp-sync-bridge",
+      "source": "claude-desktop",
+      "sourceName": "filesystem",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/fameftimie/work"],
+      "env": {}
+    },
+    "manual__example": {
+      "enabled": false,
+      "source": "manual",
+      "sourceName": "example",
+      "command": "example-mcp-server",
+      "args": [],
+      "env": {}
+    }
+  }
+}

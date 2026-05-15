@@ -1,0 +1,30 @@
+{
+  "name": "@eovidiu/pi-extensions",
+  "version": "0.1.0",
+  "description": "Personal Pi extensions, starting with an opt-in MCP sync bridge.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "mcp"
+  ],
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./extensions/mcp-sync-bridge"
+    ]
+  },
+  "dependencies": {
+    "@iarna/toml": "2.2.5",
+    "@modelcontextprotocol/sdk": "1.29.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "typescript": "^6.0.3"
+  }
+}
