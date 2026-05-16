@@ -5,7 +5,7 @@
 Path:
 
 ```bash
-/Users/fameftimie/work/pi-extensions
+/path/to/pi-extensions
 ```
 
 Package name suggestion:
@@ -337,7 +337,7 @@ The extension should:
 
 ### Phase 1 — repo/package skeleton
 
-- Create `/Users/fameftimie/work/pi-extensions`.
+- Create `/path/to/pi-extensions`.
 - Add `package.json`, `tsconfig.json`, `.gitignore`, and README.
 - Initialize local git repo.
 - Add explicit Pi package manifest path: `./extensions/mcp-bridge`.
@@ -402,13 +402,13 @@ The extension should:
 After building the repo, use it locally with:
 
 ```bash
-pi install /Users/fameftimie/work/pi-extensions
+pi install /path/to/pi-extensions
 ```
 
 or temporarily:
 
 ```bash
-pi -e /Users/fameftimie/work/pi-extensions
+pi -e /path/to/pi-extensions
 ```
 
 For ongoing development, installing the local package is preferred because it keeps the package in Pi's resource set. After edits, use `/reload`.
@@ -428,7 +428,7 @@ Security note: Pi packages run with full system permissions. Review extension so
 
 Manual testing in Pi:
 
-1. Install the local package with `pi install /Users/fameftimie/work/pi-extensions`.
+1. Install the local package with `pi install /path/to/pi-extensions`.
 2. Run `/mcp-sync`.
 3. Inspect `/mcp-status` and `~/.pi/mcp.json`.
 4. Enable trusted servers with `/mcp-enable` or `/mcp-enable <server>`.

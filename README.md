@@ -37,7 +37,7 @@ The bridge never starts newly discovered MCP servers automatically. Discovery on
 ### Local development install
 
 ```bash
-pi install /Users/fameftimie/work/pi-extensions
+pi install /path/to/pi-extensions
 ```
 
 After editing the extension, run this inside Pi:
@@ -49,7 +49,7 @@ After editing the extension, run this inside Pi:
 ### Temporary one-off load
 
 ```bash
-pi -e /Users/fameftimie/work/pi-extensions
+pi -e /path/to/pi-extensions
 ```
 
 Use this for quick testing only. A normal `pi install` is better for ongoing use because the package remains in Pi's resource set.

@@ -1,7 +1,7 @@
 {
   "name": "@eovidiu/pi-extensions",
   "version": "0.1.0",
-  "description": "Personal Pi extensions, starting with an opt-in MCP sync bridge.",
+  "description": "Pi extensions, including an opt-in MCP bridge.",
   "type": "module",
   "homepage": "https://github.com/eovidiu/pi-extensions#readme",
   "bugs": {
